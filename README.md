@@ -125,19 +125,40 @@ python3 cloudflare_speedtest.py --mode beginner --upload api --worker-domain you
 
 ---
 
-## ❓ 常见问题
+## ❓ 常见问题 (FAQ) & 避坑指南
 
-**Q: 我是小白，树莓派 3B 怎么用？**
-A: 推荐用 Docker。安装好 Docker 后，直接运行上面的“方法二”命令即可。镜像会自动适配你的树莓派。
+**Q: 启动容器后为什么没有出现配置菜单？/ 日志提示"检测到非交互式环境"？**
+A: 这是因为使用了 `-d` 参数让容器在**后台静默运行**。
+- **正确做法**：先让容器在后台跑着，然后通过以下命令“进入”容器进行配置：
+  ```bash
+  docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
+  ```
 
-**Q: 测速结果怎么用？**
-A: 打开 `data/ips_ports.txt`，把里面的 IP 填到你的代理软件（PassWall, SSR, Clash 等）的地址栏里即可。
+**Q: 我是玩客云/机顶盒 (ARM32)，需要自己下载二进制文件吗？**
+A: **完全不需要！** 
+- 之前的版本可能需要下载，但现在的 Docker 镜像已经**内置**了专门为 ARM32 编译好的核心组件。
+- 你只需要运行 Docker 命令，它会自动识别你的设备架构并使用内置文件。
 
-**Q: 为什么有时候下载失败？**
-A: 本项目依赖 GitHub 下载核心组件，国内网络可能不稳定。建议使用 Docker 版，或者手动下载组件放到目录里。
+**Q: 如何确认定时任务真的设置成功了？**
+A: 因为容器隔离机制，你在主机上直接输 `crontab -l` 是看不到的。
+- **正确做法**：查询容器内部的任务列表：
+  ```bash
+  docker exec -it cf-speedtest crontab -l
+  ```
+  如果看到类似 `0 4 * * * ...` 的输出，就是成功了。
 
-**Q: 如何查看定时任务是否设置成功？**
-A: 在主机终端运行 `docker exec -it cf-speedtest crontab -l`，如果有输出任务列表即代表成功。
+**Q: 怎么看每天有没有自动测速？**
+A: 查看容器运行日志：
+```bash
+docker logs --tail 50 cf-speedtest
+```
 
-**Q: 如何查看每天的测速日志？**
-A: 在主机终端运行 `docker logs --tail 50 cf-speedtest` 查看最近的运行日志。
+**Q: 镜像标签 (Tag) 怎么选？**
+A: 请直接使用 `:latest`。
+- 示例：`ghcr.io/1williamaoayers/yx-tools:latest`
+- 它会自动指向最新版本，且包含所有架构（amd64/arm64/arm32）的支持。
+
+**Q: 测速结果文件在哪里？**
+A: 就在你映射的本地目录里。
+- 如果你使用了推荐命令，结果在当前目录的 `data/` 文件夹内。
+- `result.csv` 是详细报告，`ips_ports.txt` 可以直接复制到代理软件使用。
