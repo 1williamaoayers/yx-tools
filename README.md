@@ -57,7 +57,9 @@ docker run -d --name cf-speedtest \
   -v $(pwd)/config:/app/config \
   --restart unless-stopped \
   ghcr.io/1williamaoayers/yx-tools:latest
+```
 
+```bash
 # 进入容器设置定时任务
 docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
 ```
@@ -133,3 +135,9 @@ A: 打开 `data/ips_ports.txt`，把里面的 IP 填到你的代理软件（Pass
 
 **Q: 为什么有时候下载失败？**
 A: 本项目依赖 GitHub 下载核心组件，国内网络可能不稳定。建议使用 Docker 版，或者手动下载组件放到目录里。
+
+**Q: 如何查看定时任务是否设置成功？**
+A: 在主机终端运行 `docker exec -it cf-speedtest crontab -l`，如果有输出任务列表即代表成功。
+
+**Q: 如何查看每天的测速日志？**
+A: 在主机终端运行 `docker logs --tail 50 cf-speedtest` 查看最近的运行日志。
