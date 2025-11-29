@@ -134,6 +134,14 @@ A: 这是因为使用了 `-d` 参数让容器在**后台静默运行**。
   docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
   ```
 
+**Q: (热修复) 为什么我看不到 result.csv 结果文件？**
+A: 如果您是早期部署的用户，结果文件可能被保存在了容器内部而不是映射的 `data` 目录。
+- **解决方法**：无需重新安装，直接运行以下"热补丁"命令即可修复：
+  ```bash
+  docker exec cf-speedtest sed -i 's/"-o", "result.csv"/"-o", "data\/result.csv"/g' /app/cloudflare_speedtest.py
+  ```
+  运行后，下一次测速的结果就会自动出现在您的 `data` 目录中了。
+
 **Q: 我是玩客云/机顶盒 (ARM32)，需要自己下载二进制文件吗？**
 A: **完全不需要！** 
 - 之前的版本可能需要下载，但现在的 Docker 镜像已经**内置**了专门为 ARM32 编译好的核心组件。
