@@ -179,3 +179,20 @@ A: 请直接使用 `:latest`。
 A: 就在你映射的本地目录里。
 - 如果你使用了推荐命令，结果在当前目录的 `data/` 文件夹内。
 - `result.csv` 是详细报告，`ips_ports.txt` 可以直接复制到代理软件使用。
+
+---
+
+## 📜 许可证
+
+本项目采用 [MIT 许可证](LICENSE) - 查看 LICENSE 文件了解详情。
+
+## 👏 致谢
+
+感谢以下项目和作者的杰出工作：
+
+*   **[Cloudflare](https://www.cloudflare.com/)** - 提供全球 CDN 服务
+*   **[CloudflareSpeedTest](https://github.com/XIU2/CloudflareSpeedTest)** - 原始测速工具 (XIU2)
+*   **[joeyblog](https://github.com/byJoey/yx-tools)** - 本项目原作者 (yx-tools)
+*   所有贡献者和用户的支持
+
+如果这个项目对您有帮助，请给我们一个星标 (Star) ⭐️！
