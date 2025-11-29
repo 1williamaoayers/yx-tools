@@ -1,6 +1,6 @@
 # Cloudflare SpeedTest 跨平台自动化工具
 
-[![Version](https://img.shields.io/badge/Version-2.2.3-blue.svg)](https://github.com/byJoey/yx-tools)
+[![Version](https://img.shields.io/badge/Version-2.2.3-blue.svg)](https://github.com/1williamaoayers/yx-tools)
 [![Python](https://img.shields.io/badge/Python-3.7+-blue.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -42,7 +42,7 @@
 适合想快速试一下，或者不想保存配置的用户。
 
 ```bash
-docker run -it --rm ghcr.io/byjoey/yx-tools:latest
+docker run -it --rm ghcr.io/1williamaoayers/yx-tools:latest
 ```
 *运行后按提示选择“小白模式”即可开始测速。*
 
@@ -56,7 +56,7 @@ docker run -d --name cf-speedtest \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/config:/app/config \
   --restart unless-stopped \
-  ghcr.io/byjoey/yx-tools:latest
+  ghcr.io/1williamaoayers/yx-tools:latest
 
 # 进入容器设置定时任务
 docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
@@ -71,7 +71,7 @@ docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
 version: '3'
 services:
   speedtest:
-    image: ghcr.io/byjoey/yx-tools:latest
+    image: ghcr.io/1williamaoayers/yx-tools:latest
     container_name: cf-speedtest
     restart: unless-stopped
     volumes:
