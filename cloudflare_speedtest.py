@@ -572,6 +572,8 @@ def download_cloudflare_speedtest(os_type, arch_type):
             archive_name = "CloudflareST_proxy_linux_amd64.tar.gz"
         elif arch_type == "386":
             archive_name = "CloudflareST_proxy_linux_386.tar.gz"
+        elif arch_type == "arm":
+            archive_name = "CloudflareST_proxy_linux_arm.tar.gz"
         else:  # arm64
             archive_name = "CloudflareST_proxy_linux_arm64.tar.gz"
     

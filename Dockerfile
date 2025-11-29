@@ -1,4 +1,14 @@
-# 使用官方Python镜像作为基础镜像
+# 构建阶段 - 编译CloudflareSpeedTest
+FROM golang:1.21-alpine AS builder
+WORKDIR /src
+# 复制本地源码到容器中
+COPY CloudflareSpeedTest .
+# 编译各架构版本
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o CloudflareST_proxy_linux_amd64 .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w" -o CloudflareST_proxy_linux_arm64 .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "-s -w" -o CloudflareST_proxy_linux_arm .
+
+# 运行阶段
 FROM python:3.9-slim
 
 # 设置工作目录
@@ -29,12 +39,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制项目文件
 COPY cloudflare_speedtest.py .
 
-COPY CloudflareST_proxy_linux_amd64 /app/CloudflareST_proxy_linux_amd64
-COPY CloudflareST_proxy_linux_arm64 /app/CloudflareST_proxy_linux_arm64
+# 从构建阶段复制编译好的二进制文件
+COPY --from=builder /src/CloudflareST_proxy_linux_amd64 /app/CloudflareST_proxy_linux_amd64
+COPY --from=builder /src/CloudflareST_proxy_linux_arm64 /app/CloudflareST_proxy_linux_arm64
+COPY --from=builder /src/CloudflareST_proxy_linux_arm /app/CloudflareST_proxy_linux_arm
 
 # 赋予可执行文件执行权限
 RUN chmod +x /app/CloudflareST_proxy_linux_amd64 \
-    && chmod +x /app/CloudflareST_proxy_linux_arm64
+    && chmod +x /app/CloudflareST_proxy_linux_arm64 \
+    && chmod +x /app/CloudflareST_proxy_linux_arm
 
 # 创建数据目录（用于保存结果文件）
 RUN mkdir -p /app/data /app/config
