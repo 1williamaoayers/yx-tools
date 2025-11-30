@@ -134,23 +134,6 @@ A: 这是因为使用了 `-d` 参数让容器在**后台静默运行**。
   docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
   ```
 
-**Q: (热修复) 为什么我看不到 result.csv 结果文件？**
-A: 如果您是早期部署的用户，结果文件可能被保存在了容器内部而不是映射的 `data` 目录。
-- **解决方法**：无需重新安装，直接运行以下"热补丁"命令即可修复：
-  ```bash
-  docker exec cf-speedtest sed -i 's/"-o", "result.csv"/"-o", "data\/result.csv"/g' /app/cloudflare_speedtest.py
-  ```
-  运行后，下一次测速的结果就会自动出现在您的 `data` 目录中了。
-
-- **如何验证任务是否运行？**
-  旧版本容器无法通过 `docker logs` 查看定时任务日志（这是新版本才有的功能）。
-  您可以通过检查结果文件的**修改时间**来确认：
-  ```bash
-  # 在宿主机运行
-  ls -l data/result.csv
-  ```
-  只要时间在更新，就说明任务正常运行。
-
 **Q: 我是玩客云/机顶盒 (ARM32)，需要自己下载二进制文件吗？**
 A: **完全不需要！** 
 - 之前的版本可能需要下载，但现在的 Docker 镜像已经**内置**了专门为 ARM32 编译好的核心组件。
@@ -165,10 +148,13 @@ A: 因为容器隔离机制，你在主机上直接输 `crontab -l` 是看不到
   如果看到类似 `0 4 * * * ...` 的输出，就是成功了。
 
 **Q: 怎么看每天有没有自动测速？**
-A: 查看容器运行日志：
-```bash
-docker logs --tail 50 cf-speedtest
-```
+A: 有两种方法：
+1. **查看容器日志** (推荐)：
+   ```bash
+   docker logs --tail 50 cf-speedtest
+   ```
+2. **检查结果文件时间**：
+   查看宿主机 `data/result.csv` 文件的修改时间，只要时间在更新，就说明任务正常运行。
 
 **Q: 镜像标签 (Tag) 怎么选？**
 A: 请直接使用 `:latest`。
