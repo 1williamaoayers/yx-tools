@@ -2461,12 +2461,14 @@ def setup_cron_job():
             env_path = python_dir
         
         # 构建cron命令，包含PATH环境变量设置
-        # 如果在Docker环境中，添加重定向以便在docker logs中查看
+        # 如果在Docker环境中，添加重定向以便在docker logs中查看，并确保进入/app目录
         redirect = ""
+        cd_cmd = ""
         if os.path.exists('/.dockerenv') or os.path.exists('/app/docker-entrypoint.sh'):
             redirect = " >> /proc/1/fd/1 2>&1"
+            cd_cmd = "cd /app && "
 
-        cron_line = f"{cron_time} PATH={env_path} {current_command}{redirect}"
+        cron_line = f"{cron_time} {cd_cmd}PATH={env_path} {current_command}{redirect}"
     else:
         # 非Python脚本，直接使用命令
         cron_line = f"{cron_time} {current_command}"
