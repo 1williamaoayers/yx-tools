@@ -155,7 +155,7 @@ python3 cloudflare_speedtest.py --mode beginner --upload api --worker-domain you
 ## 📂 结果说明
 测速完成后，结果文件位于 `data` 目录下：
 *   `result.csv`: 完整测速报告。
-*   `ips_ports.txt`: 生成好的 IP:端口 列表，可直接导入 Clash/V2Ray 等软件。
+
 
 ---
 
@@ -232,18 +232,12 @@ A: 就在你映射的本地目录里。
 
 *   **默认部署** (当前目录)：
     ```bash
-    # 查看优选 IP (可以直接复制内容)
-    cat data/ips_ports.txt
-
     # 查看详细测速报告
     cat data/result.csv
     ```
 
 *   **部署到 `/home/yx`**：
     ```bash
-    # 查看优选 IP (可以直接复制内容)
-    cat /home/yx/data/ips_ports.txt
-
     # 查看详细测速报告
     cat /home/yx/data/result.csv
     ```
