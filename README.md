@@ -190,10 +190,15 @@ A: 有两种方法：
    ```
    新版已优化日志重定向，定时任务的运行日志会直接显示在这里。
 2. **检查结果文件时间**：
-   在宿主机终端运行以下命令，查看文件时间是否变成了今天：
-   ```bash
-   ls -l data/result.csv
-   ```
+   根据你的部署方式选择命令（直接复制粘贴）：
+   *   **默认部署** (当前目录)：
+       ```bash
+       ls -l data/result.csv
+       ```
+   *   **部署到 `/home/yx`**：
+       ```bash
+       ls -l /home/yx/data/result.csv
+       ```
    *(Windows 用户直接在文件夹里看“修改日期”即可)*
 
 **Q: 重建容器后定时任务还在吗？**
@@ -212,17 +217,25 @@ A: 就在你映射的本地目录里。
 *   **如果你是默认部署**：在当前目录的 `data/` 文件夹内。
 *   **如果你部署到了 `/home/yx`**：在 `/home/yx/data/` 文件夹内。
 
-查看结果文件的命令 (请先进入对应目录，或修改路径)：
-```bash
-# 假设你在部署目录下 (或者直接进入 /home/yx)
-cd /home/yx
+**查看结果文件的命令** (直接复制粘贴)：
 
-# 查看所有优选IP（可以直接复制内容）
-cat data/ips_ports.txt
+*   **默认部署** (当前目录)：
+    ```bash
+    # 查看优选 IP (可以直接复制内容)
+    cat data/ips_ports.txt
 
-# 查看详细测速报告
-cat data/result.csv
-```
+    # 查看详细测速报告
+    cat data/result.csv
+    ```
+
+*   **部署到 `/home/yx`**：
+    ```bash
+    # 查看优选 IP (可以直接复制内容)
+    cat /home/yx/data/ips_ports.txt
+
+    # 查看详细测速报告
+    cat /home/yx/data/result.csv
+    ```
 *(Windows 用户请直接双击打开 data 文件夹查看)*
 
 **Q: 我不想用了，怎么彻底删除（一点空间都不占）？**
