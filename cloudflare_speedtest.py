@@ -905,6 +905,7 @@ def get_user_input(ip_file=CLOUDFLARE_IP_FILE, ip_version="ipv4"):
     print("  1. 小白快速测试 - 简单输入，适合新手")
     print("  2. 常规测速 - 测试指定机场码的IP速度")
     print("  3. 优选反代 - 从CSV文件生成反代IP列表")
+    print("  4. 设置定时任务 - 仅设置定时任务，不运行测速")
     print("=" * 60)
     
     choice = input("\n请选择功能 [默认: 1]: ").strip()
@@ -917,6 +918,9 @@ def get_user_input(ip_file=CLOUDFLARE_IP_FILE, ip_version="ipv4"):
     elif choice == "3":
         # 优选反代模式
         return handle_proxy_mode()
+    elif choice == "4":
+        # 设置定时任务模式
+        return handle_cron_setup_mode(ip_version)
     else:
         # 常规测速模式
         return handle_normal_mode(ip_file, ip_version)
@@ -1126,6 +1130,181 @@ def handle_proxy_mode():
     else:
         print("\n优选反代功能失败")
         return None, None, None, None
+
+
+def handle_cron_setup_mode(ip_version="ipv4"):
+    """处理定时任务设置模式（不运行测速）"""
+    print("\n" + "=" * 70)
+    print(" 定时任务设置向导")
+    print("=" * 70)
+    print(" 此功能将引导您生成定时任务所需的命令，并添加到系统定时任务中")
+    print(" 注意：此过程不会运行实际测速")
+    print("=" * 70)
+    
+    # 获取测试IP数量
+    print("\n📊 第一步：设置测试IP数量")
+    print("说明：测试的IP数量越多，结果越准确，但耗时越长")
+    while True:
+        dn_count = input("请输入要测试的IP数量 [默认: 10]: ").strip()
+        if not dn_count:
+            dn_count = "10"
+        try:
+            dn_count_int = int(dn_count)
+            if dn_count_int <= 0:
+                print("✗ 请输入大于0的数字")
+                continue
+            if dn_count_int > 100:
+                print("⚠️  测试数量较多，可能需要较长时间")
+                confirm = input("  是否继续？[y/N]: ").strip().lower()
+                if confirm != 'y':
+                    continue
+            dn_count = str(dn_count_int)
+            break
+        except ValueError:
+            print("✗ 请输入有效的数字")
+    
+    # 获取延迟阈值
+    print(f"\n⏱️  第二步：设置延迟上限")
+    print("说明：延迟越低，网络响应越快。一般建议100-1000ms")
+    while True:
+        time_limit = input("请输入延迟上限(ms) [默认: 1000]: ").strip()
+        if not time_limit:
+            time_limit = "1000"
+        try:
+            time_limit_int = int(time_limit)
+            if time_limit_int <= 0:
+                print("✗ 请输入大于0的数字")
+                continue
+            time_limit = str(time_limit_int)
+            break
+        except ValueError:
+            print("✗ 请输入有效的数字")
+    
+    # 获取下载速度下限
+    print(f"\n🚀 第三步：设置下载速度下限")
+    print("说明：速度越高，网络越快。一般建议1-10MB/s")
+    while True:
+        speed_limit = input("请输入下载速度下限(MB/s) [默认: 1]: ").strip()
+        if not speed_limit:
+            speed_limit = "1"
+        try:
+            speed_limit_float = float(speed_limit)
+            if speed_limit_float < 0:
+                print("✗ 请输入大于等于0的数字")
+                continue
+            speed_limit = str(speed_limit_float)
+            break
+        except ValueError:
+            print("✗ 请输入有效的数字")
+    
+    # 获取延迟测速线程数
+    print(f"\n⚡ 第四步：设置延迟测速线程数")
+    print("说明：线程数越多延迟测速越快，性能弱的设备(如路由器)请勿太高")
+    while True:
+        thread_count = input("请输入延迟测速线程数 [默认: 200, 最多: 1000]: ").strip()
+        if not thread_count:
+            thread_count = "200"
+        try:
+            thread_count_int = int(thread_count)
+            if thread_count_int <= 0:
+                print("✗ 请输入大于0的数字")
+                continue
+            if thread_count_int > 1000:
+                print("✗ 线程数不能超过1000")
+                continue
+            thread_count = str(thread_count_int)
+            break
+        except ValueError:
+            print("✗ 请输入有效的数字")
+            
+    # 上传设置
+    print("\n" + "=" * 70)
+    print(" 优选结果上报设置")
+    print("=" * 70)
+    
+    upload_info = None
+    choice = input("\n是否要设置结果上报？[y/N]: ").strip().lower()
+    if choice in ['y', 'yes']:
+        print("\n请选择上传方式")
+        print("  1. Cloudflare Workers API")
+        print("  2. GitHub (Gist)")
+        
+        while True:
+            upload_method = input("\n请选择上传方式 [1/2]: ").strip()
+            if upload_method == "1":
+                # API Config
+                print("\n📝 请输入您的 Worker 管理页面 URL")
+                print("示例: https://你的域名/你的UUID或者路径")
+                management_url = input("管理页面 URL: ").strip()
+                if management_url:
+                    try:
+                        from urllib.parse import urlparse
+                        management_url = management_url.strip().rstrip('/')
+                        if not management_url.startswith(('http://', 'https://')):
+                            management_url = 'https://' + management_url
+                        parsed = urlparse(management_url)
+                        worker_domain = parsed.netloc
+                        
+                        # 从路径中提取 UUID
+                        path_parts = [p for p in parsed.path.strip('/').split('/') if p]
+                        uuid = path_parts[-1] if path_parts else ""
+                        
+                        if worker_domain and uuid:
+                            # Ask for clear
+                            clear_choice = input("上传前是否清空现有IP？[Y/n]: ").strip().lower()
+                            should_clear = clear_choice not in ['n', 'no']
+                            # Ask for upload count
+                            uc_input = input("上传IP数量 [默认: 10]: ").strip()
+                            uc = int(uc_input) if uc_input.isdigit() else 10
+                            
+                            upload_info = {
+                                "upload_method": "api",
+                                "worker_domain": worker_domain,
+                                "uuid": uuid,
+                                "upload_count": uc,
+                                "clear_existing": should_clear
+                            }
+                            print(f"✅ 已配置 API 上报: {worker_domain}")
+                        else:
+                            print("❌ URL 解析失败，请确保包含域名和UUID")
+                    except Exception as e:
+                        print(f"❌ URL 解析错误: {e}")
+                break
+            elif upload_method == "2":
+                # GitHub Config
+                repo = input("GitHub 仓库 (owner/repo): ").strip()
+                token = input("GitHub Token: ").strip()
+                if repo and token:
+                    uc_input = input("上传IP数量 [默认: 10]: ").strip()
+                    uc = int(uc_input) if uc_input.isdigit() else 10
+                    upload_info = {
+                        "upload_method": "github",
+                        "repo": repo,
+                        "token": token,
+                        "file_path": "cloudflare_ips.txt",
+                        "upload_count": uc
+                    }
+                    print(f"✅ 已配置 GitHub 上报: {repo}")
+                break
+            else:
+                print("✗ 请输入 1 或 2")
+
+    # 生成命令
+    cli_cmd = generate_cli_command("beginner", ip_version, None, dn_count, speed_limit, time_limit, upload_info, thread_count)
+    
+    # 设置全局变量并调用 setup_cron_job
+    global LAST_GENERATED_COMMAND
+    LAST_GENERATED_COMMAND = cli_cmd
+    
+    print("\n" + "=" * 80)
+    print(" 生成的命令:")
+    print("-" * 80)
+    print(cli_cmd)
+    print("-" * 80)
+    
+    setup_cron_job()
+    
+    return "CRON_SETUP", None, None, None
 
 
 def handle_beginner_mode(ip_file=CLOUDFLARE_IP_FILE, ip_version="ipv4"):
@@ -2198,9 +2377,13 @@ def main():
     print("=" * 60)
     result = get_user_input(ip_file, ip_version)
     
-    # 检查是否是优选反代模式
-    if result == (None, None, None, None):
-        print("\n优选反代功能已完成，程序退出")
+    # 检查是否是优选反代模式或定时任务设置模式
+    if result == (None, None, None, None) or result == ("CRON_SETUP", None, None, None):
+        if result[0] == "CRON_SETUP":
+             print("\n定时任务设置已完成，程序退出")
+        else:
+             print("\n优选反代功能已完成，程序退出")
+             
         # Windows 系统添加暂停，避免窗口立即关闭
         if sys.platform == "win32":
             print("\n" + "=" * 60)
