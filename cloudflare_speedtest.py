@@ -2688,6 +2688,39 @@ def setup_cron_job():
         if process.returncode == 0:
             print("\n✅ 定时任务设置成功！")
             print(f"任务: {cron_line}")
+            
+            # 同步到 /app/config/crontab 以便容器重启后恢复
+            if os.path.exists('/app/config'):
+                try:
+                    with open('/app/config/crontab', 'w', encoding='utf-8') as f:
+                        f.write(new_crontab)
+                    print("✅ 定时任务已同步到 /app/config/crontab (容器重启自动恢复)")
+                except Exception as e:
+                    print(f"⚠️ 同步到 /app/config/crontab 失败: {e}")
+            
+            # 尝试启动cron服务 (针对Docker环境)
+            try:
+                print("正在尝试启动 Cron 服务...")
+                # 尝试多种方式启动cron
+                started = False
+                if os.path.exists('/usr/sbin/service') or os.path.exists('/bin/service'):
+                    subprocess.run(['service', 'cron', 'start'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                    started = True
+                
+                if not started and (os.path.exists('/usr/sbin/crond') or os.path.exists('/bin/crond')):
+                    subprocess.run(['crond'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                    started = True
+                
+                if not started:
+                    # 最后的尝试：直接调用cron
+                    subprocess.run(['cron'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            except Exception:
+                pass
+
+            print(f"当前容器时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            if os.path.exists('/.dockerenv'):
+                print("⚠️ Docker注意: 请确保容器时间正确，且 Cron 服务已启动")
+
             print("\n💡 提示:")
             print("  - 使用 'crontab -l' 查看所有定时任务")
             print("  - 使用 'crontab -e' 编辑定时任务")

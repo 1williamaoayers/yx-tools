@@ -52,6 +52,9 @@ RUN chmod +x /app/CloudflareST_proxy_linux_amd64 \
 # 创建数据目录（用于保存结果文件）
 RUN mkdir -p /app/data /app/config
 
+# 声明数据卷，确保数据持久化
+VOLUME ["/app/data", "/app/config"]
+
 # 复制启动脚本
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh

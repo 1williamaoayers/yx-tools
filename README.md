@@ -52,6 +52,7 @@ docker run -it --rm ghcr.io/1williamaoayers/yx-tools:latest
 
 ```bash
 # 启动容器（后台运行，重启自动恢复）
+# ⚠️ 注意：务必挂载 config 目录，否则重建容器后定时任务会丢失！
 docker run -d --name cf-speedtest \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/config:/app/config \
@@ -63,7 +64,7 @@ docker run -d --name cf-speedtest \
 # 进入容器设置定时任务
 docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
 ```
-*进入容器后，选择功能菜单中的“设置定时任务”即可。结果文件会保存在当前目录的 `data` 文件夹下。*
+*进入容器后，选择功能菜单中的 **"4. 设置定时任务"** 即可（新版支持仅设置任务不测速）。结果文件会保存在当前目录的 `data` 文件夹下。*
 
 ### 方法三：Docker Compose (高级玩家)
 
@@ -146,6 +147,7 @@ A: 因为容器隔离机制，你在主机上直接输 `crontab -l` 是看不到
   docker exec -it cf-speedtest crontab -l
   ```
   如果看到类似 `0 4 * * * ...` 的输出，就是成功了。
+- **新版特性**：现在设置任务后，脚本会自动尝试启动 cron 服务并打印容器时间，确保任务能准时运行。
 
 **Q: 怎么看每天有没有自动测速？**
 A: 有两种方法：
@@ -153,8 +155,15 @@ A: 有两种方法：
    ```bash
    docker logs --tail 50 cf-speedtest
    ```
+   新版已优化日志重定向，定时任务的运行日志会直接显示在这里。
 2. **检查结果文件时间**：
    查看宿主机 `data/result.csv` 文件的修改时间，只要时间在更新，就说明任务正常运行。
+
+**Q: 重建容器后定时任务还在吗？**
+A: **只要挂载了目录就在！**
+- 必须确保启动时挂载了 `-v ...:/app/config`。
+- 脚本会将定时任务备份到 `/app/config/crontab`。
+- 容器启动时，`docker-entrypoint.sh` 会自动从这个文件恢复你的定时任务。
 
 **Q: 镜像标签 (Tag) 怎么选？**
 A: 请直接使用 `:latest`。
