@@ -50,6 +50,9 @@ docker run -it --rm ghcr.io/1williamaoayers/yx-tools:latest
 
 适合长期挂在 **NAS、树莓派、软路由** 上，每天自动测速更新 IP。
 
+#### 1. 默认部署 (推荐)
+直接在当前目录运行，数据会保存在当前文件夹下。
+
 ```bash
 # 启动容器（后台运行，重启自动恢复）
 # ⚠️ 注意：务必挂载 config 目录，否则重建容器后定时任务会丢失！
@@ -60,11 +63,41 @@ docker run -d --name cf-speedtest \
   ghcr.io/1williamaoayers/yx-tools:latest
 ```
 
+#### 2. 自定义目录部署 (想放哪里放哪里)
+
+如果你想自己指定数据存放的位置（方便查找），只需要修改命令中的路径。
+
+**例如：我想把文件放在 `/my/cool/folder` 目录下：**
+
+1.  先创建这个文件夹：
+    ```bash
+    mkdir -p /my/cool/folder
+    ```
+
+2.  然后运行 Docker 命令（注意看 `-v` 后面的路径）：
+    ```bash
+    docker run -d --name cf-speedtest \
+      -v /my/cool/folder/data:/app/data \
+      -v /my/cool/folder/config:/app/config \
+      --restart unless-stopped \
+      ghcr.io/1williamaoayers/yx-tools:latest
+    ```
+
+**小白说明书：**
+*   命令里的 `-v 你的路径:/app/data` 意思就是：把容器里的数据，映射到你电脑上的“你的路径”。
+*   你只需要把 `/my/cool/folder` 替换成你实际想要的路径即可。
+
+
+---
+
+#### 设置定时任务
+无论使用哪种部署方式，启动后都需要进行一次设置：
+
 ```bash
 # 进入容器设置定时任务
 docker exec -it cf-speedtest python3 /app/cloudflare_speedtest.py
 ```
-*进入容器后，选择功能菜单中的 **"4. 设置定时任务"** 即可（新版支持仅设置任务不测速）。结果文件会保存在当前目录的 `data` 文件夹下。*
+*进入容器后，选择功能菜单中的 **"4. 设置定时任务"** 即可（新版支持仅设置任务不测速）。*
 
 ### 方法三：Docker Compose (高级玩家)
 
