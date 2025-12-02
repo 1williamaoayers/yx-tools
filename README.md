@@ -67,25 +67,25 @@ docker run -d --name cf-speedtest \
 
 如果你想自己指定数据存放的位置（方便查找），只需要修改命令中的路径。
 
-**例如：我想把文件放在 `/my/cool/folder` 目录下：**
+**例如：我想把文件放在 `/home/yx` 目录下：**
 
 1.  先创建这个文件夹：
     ```bash
-    mkdir -p /my/cool/folder
+    mkdir -p /home/yx
     ```
 
 2.  然后运行 Docker 命令（注意看 `-v` 后面的路径）：
     ```bash
     docker run -d --name cf-speedtest \
-      -v /my/cool/folder/data:/app/data \
-      -v /my/cool/folder/config:/app/config \
+      -v /home/yx/data:/app/data \
+      -v /home/yx/config:/app/config \
       --restart unless-stopped \
       ghcr.io/1williamaoayers/yx-tools:latest
     ```
 
 **小白说明书：**
 *   命令里的 `-v 你的路径:/app/data` 意思就是：把容器里的数据，映射到你电脑上的“你的路径”。
-*   你只需要把 `/my/cool/folder` 替换成你实际想要的路径即可。
+*   你只需要把 `/home/yx` 替换成你实际想要的路径即可。
 
 
 ---
