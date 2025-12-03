@@ -16,6 +16,7 @@ import csv
 import argparse
 from pathlib import Path
 from datetime import datetime
+import re
 
 
 # 使用curl的备用HTTP请求函数（解决SSL模块不可用的问题）
@@ -1235,21 +1236,50 @@ def handle_cron_setup_mode(ip_version="ipv4"):
                 # API Config
                 print("\n📝 请输入您的 Worker 管理页面 URL")
                 print("示例: https://你的域名/你的UUID或者路径")
+                print("提示: 支持同时填写多个Worker API，用英文逗号分隔即可")
+                print("小白示例: https://你的第一个域名/你的第一个UUID,https://你的第二个域名/你的第二个UUID")
                 management_url = input("管理页面 URL: ").strip()
                 if management_url:
                     try:
                         from urllib.parse import urlparse
-                        management_url = management_url.strip().rstrip('/')
-                        if not management_url.startswith(('http://', 'https://')):
-                            management_url = 'https://' + management_url
-                        parsed = urlparse(management_url)
-                        worker_domain = parsed.netloc
                         
-                        # 从路径中提取 UUID
-                        path_parts = [p for p in parsed.path.strip('/').split('/') if p]
-                        uuid = path_parts[-1] if path_parts else ""
+                        # 处理多个 URL (逗号分隔)
+                        raw_urls = [u.strip() for u in management_url.split(',') if u.strip()]
+                        parsed_domains = []
+                        parsed_uuids = []
                         
-                        if worker_domain and uuid:
+                        valid = True
+                        for raw_url in raw_urls:
+                            curr_url = raw_url.strip().rstrip('/')
+                            if not curr_url.startswith(('http://', 'https://')):
+                                curr_url = 'https://' + curr_url
+                            
+                            try:
+                                parsed = urlparse(curr_url)
+                                curr_domain = parsed.netloc
+                                if not curr_domain:
+                                    print(f"❌ 无法解析域名: {raw_url}")
+                                    valid = False
+                                    break
+                                
+                                path_parts = [p for p in parsed.path.strip('/').split('/') if p]
+                                curr_uuid = path_parts[-1] if path_parts else ""
+                                if not curr_uuid:
+                                    print(f"❌ 无法从 URL 中提取 UUID: {raw_url}")
+                                    valid = False
+                                    break
+                                    
+                                parsed_domains.append(curr_domain)
+                                parsed_uuids.append(curr_uuid)
+                            except Exception:
+                                print(f"❌ URL解析错误: {raw_url}")
+                                valid = False
+                                break
+                        
+                        if valid and parsed_domains:
+                            worker_domain = ",".join(parsed_domains)
+                            uuid = ",".join(parsed_uuids)
+                            
                             # Ask for clear
                             clear_choice = input("上传前是否清空现有IP？[Y/n]: ").strip().lower()
                             should_clear = clear_choice not in ['n', 'no']
@@ -1264,7 +1294,9 @@ def handle_cron_setup_mode(ip_version="ipv4"):
                                 "upload_count": uc,
                                 "clear_existing": should_clear
                             }
-                            print(f"✅ 已配置 API 上报: {worker_domain}")
+                            print(f"✅ 已配置 {len(parsed_domains)} 个 API 上报节点")
+                            for i, (d, u) in enumerate(zip(parsed_domains, parsed_uuids), 1):
+                                print(f"   {i}. {d} / {u}")
                         else:
                             print("❌ URL 解析失败，请确保包含域名和UUID")
                     except Exception as e:
@@ -2551,6 +2583,121 @@ def setup_cron_job():
             print("   您可以使用 'crontab -e' 手动编辑定时任务")
             return
     
+    # 询问是否修改参数
+    print("\n" + "-" * 70)
+    print(" 高级参数设置")
+    print("-" * 70)
+    print("您可以在此修改定时任务的运行参数（不影响本次运行配置）")
+    
+    modify_choice = input("\n是否要修改运行参数（如线程数、上传API配置）？[y/N]: ").strip().lower()
+    if modify_choice in ['y', 'yes']:
+        # 1. 修改线程数
+        print("\n[1/2] 线程数设置")
+        # 尝试从当前命令中提取线程数
+        current_thread_match = re.search(r' -n (\d+)', current_command)
+        current_thread = current_thread_match.group(1) if current_thread_match else "200"
+        
+        print(f"当前线程数: {current_thread}")
+        new_thread = input("请输入新的线程数 (回车保持不变): ").strip()
+        if new_thread:
+            try:
+                if int(new_thread) > 0:
+                    if ' -n ' in current_command:
+                        current_command = re.sub(r' -n \d+', f' -n {new_thread}', current_command)
+                    else:
+                        current_command += f" -n {new_thread}"
+                    print(f"✅ 线程数已更新为: {new_thread}")
+                else:
+                    print("⚠️  无效的数字，保持不变")
+            except ValueError:
+                print("⚠️  无效的输入，保持不变")
+        
+        # 2. 修改上传配置
+        print("\n[2/2] 上传API设置")
+        upload_choice = input("是否要修改上传API配置？[y/N]: ").strip().lower()
+        if upload_choice in ['y', 'yes']:
+            print("\n请选择上传方式")
+            print("  1. Cloudflare Workers API")
+            print("  2. GitHub (Gist)")
+            print("  3. 不上传 (清除上传配置)")
+            
+            method = input("\n请选择 [1/2/3]: ").strip()
+            
+            # 先清除现有的上传参数
+            current_command = re.sub(r' --upload \w+', '', current_command)
+            current_command = re.sub(r' --worker-domain [^\s]+', '', current_command)
+            current_command = re.sub(r' --uuid [^\s]+', '', current_command)
+            current_command = re.sub(r' --token [^\s]+', '', current_command)
+            current_command = re.sub(r' --repo [^\s]+', '', current_command)
+            current_command = re.sub(r' --file-path [^\s]+', '', current_command)
+            
+            if method == "1":
+                # API Config
+                print("\n📝 请输入您的 Worker 管理页面 URL")
+                print("示例: https://你的域名/你的UUID或者路径")
+                print("提示: 支持同时填写多个Worker API，用英文逗号分隔即可")
+                print("小白示例: https://你的第一个域名/你的第一个UUID,https://你的第二个域名/你的第二个UUID")
+                management_url = input("管理页面 URL: ").strip()
+                if management_url:
+                    from urllib.parse import urlparse
+                    
+                    raw_urls = [u.strip() for u in management_url.split(',') if u.strip()]
+                    parsed_domains = []
+                    parsed_uuids = []
+                    
+                    valid = True
+                    for raw_url in raw_urls:
+                        curr_url = raw_url.strip().rstrip('/')
+                        if not curr_url.startswith(('http://', 'https://')):
+                            curr_url = 'https://' + curr_url
+                        
+                        try:
+                            parsed = urlparse(curr_url)
+                            if not parsed.netloc:
+                                print(f"❌ 无法解析域名: {raw_url}")
+                                valid = False
+                                break
+                            
+                            path_parts = [p for p in parsed.path.strip('/').split('/') if p]
+                            if not path_parts:
+                                print(f"❌ 无法从 URL 中提取 UUID: {raw_url}")
+                                valid = False
+                                break
+                                
+                            parsed_domains.append(parsed.netloc)
+                            parsed_uuids.append(path_parts[-1])
+                        except Exception:
+                            print(f"❌ URL解析错误: {raw_url}")
+                            valid = False
+                            break
+                    
+                    if valid and parsed_domains:
+                        domains_str = ",".join(parsed_domains)
+                        uuids_str = ",".join(parsed_uuids)
+                        
+                        # 显示解析结果
+                        print(f"\n✅ 成功解析 {len(parsed_domains)} 个配置:")
+                        for i, (d, u) in enumerate(zip(parsed_domains, parsed_uuids), 1):
+                            print(f"   {i}. {d} / {u}")
+                            
+                        current_command += f" --upload api --worker-domain {domains_str} --uuid {uuids_str}"
+                        print("✅ API上传配置已更新")
+                    else:
+                        print("⚠️  配置无效，未更新上传配置")
+            
+            elif method == "2":
+                token = input("请输入 GitHub Token: ").strip()
+                repo = input("请输入 仓库路径 (owner/repo): ").strip()
+                if token and repo:
+                    current_command += f" --upload github --token '{token}' --repo {repo}"
+                    print("✅ GitHub上传配置已更新")
+            
+            elif method == "3":
+                current_command += " --upload none"
+                print("✅ 上传配置已清除")
+                
+    print(f"\n最终生成的命令: {current_command}")
+    
     # 检查是否已有类似的任务
     app_name = os.path.basename(sys.argv[0])
     existing_jobs = check_existing_cron_jobs(app_name)
@@ -2725,6 +2872,15 @@ def setup_cron_job():
             print("  - 使用 'crontab -l' 查看所有定时任务")
             print("  - 使用 'crontab -e' 编辑定时任务")
             print("  - 使用 'crontab -r' 删除所有定时任务")
+            
+            # 询问是否立即运行
+            print("\n" + "=" * 70)
+            print(" 立即运行")
+            print("-" * 70)
+            run_now = input("是否立即按此配置运行一次？[y/N]: ").strip().lower()
+            if run_now in ['y', 'yes']:
+                print(f"\n🚀 正在立即运行...\n命令: {current_command}\n")
+                os.system(current_command)
         else:
             print("❌ 设置定时任务失败")
     except Exception as e:
@@ -2992,9 +3148,9 @@ def upload_results_to_api(result_file="result.csv"):
     print("=" * 70)
     
     # 询问是否上报
-    choice = input("\n是否要上报优选结果？[y/N]: ").strip().lower()
+    choice = input("\n是否要设置优选结果上报？[y/N]: ").strip().lower()
     if choice not in ['y', 'yes']:
-        print("跳过上报")
+        print("跳过上报设置")
         return None
     
     # 选择上传方式
@@ -3076,7 +3232,8 @@ def upload_to_cloudflare_api(result_file="result.csv"):
         # 获取管理页面 URL
         print("\n📝 请输入您的 Worker 管理页面 URL")
         print("示例: https://你的域名/你的UUID或者路径")
-        print("提示: 直接复制浏览器地址栏的完整URL即可")
+        print("提示: 支持同时填写多个Worker API，用英文逗号分隔即可")
+        print("小白示例: https://你的第一个域名/你的第一个UUID,https://你的第二个域名/你的第二个UUID")
         
         management_url = input("\n管理页面 URL: ").strip()
         if not management_url:
@@ -3087,36 +3244,49 @@ def upload_to_cloudflare_api(result_file="result.csv"):
         try:
             from urllib.parse import urlparse
             
-            # 移除可能的协议前缀和尾部斜杠
-            management_url = management_url.strip().rstrip('/')
+            # 处理多个 URL (逗号分隔)
+            raw_urls = [u.strip() for u in management_url.split(',') if u.strip()]
+            parsed_domains = []
+            parsed_uuids = []
             
-            # 如果没有协议前缀，添加 https://
-            if not management_url.startswith(('http://', 'https://')):
-                management_url = 'https://' + management_url
+            for raw_url in raw_urls:
+                # 移除可能的协议前缀和尾部斜杠
+                curr_url = raw_url.strip().rstrip('/')
+                
+                # 如果没有协议前缀，添加 https://
+                if not curr_url.startswith(('http://', 'https://')):
+                    curr_url = 'https://' + curr_url
+                
+                # 解析 URL
+                parsed = urlparse(curr_url)
+                curr_domain = parsed.netloc
+                
+                if not curr_domain:
+                    print(f"❌ 无法解析域名: {raw_url}")
+                    return None
+                
+                # 从路径中提取最后一个非空部分作为UUID
+                path_parts = [p for p in parsed.path.strip('/').split('/') if p]
+                if not path_parts:
+                    print(f"❌ 无法从 URL 中提取 UUID或者路径: {raw_url}")
+                    return None
+                
+                curr_uuid = path_parts[-1]
+                
+                parsed_domains.append(curr_domain)
+                parsed_uuids.append(curr_uuid)
             
-            # 解析 URL
-            parsed = urlparse(management_url)
-            worker_domain = parsed.netloc
-            
-            # 从路径中提取 UUID（不再验证格式）
-            if not worker_domain:
-                print("❌ 无法解析域名，请检查 URL 格式")
+            if not parsed_domains:
+                print("❌ 未能解析出有效的配置")
                 return None
-            
-            # 从路径中提取最后一个非空部分作为UUID
-            path_parts = [p for p in parsed.path.strip('/').split('/') if p]
-            if not path_parts:
-                print("❌ 无法从 URL 中提取 UUID或者路径")
-                print("   请确保 URL 包含 UUID或者路径")
-                print("   格式示例: https://域名/UUID或者路径")
-                return None
-            
-            uuid = path_parts[-1]
+                
+            worker_domain = ",".join(parsed_domains)
+            uuid = ",".join(parsed_uuids)
             
             # 显示解析结果
-            print(f"\n✅ 成功解析配置:")
-            print(f"   Worker 域名: {worker_domain}")
-            print(f"   UUID或者路径: {uuid}")
+            print(f"\n✅ 成功解析 {len(parsed_domains)} 个配置:")
+            for i, (d, u) in enumerate(zip(parsed_domains, parsed_uuids), 1):
+                print(f"   {i}. {d} / {u}")
             
             # 询问是否保存配置
             save_choice = input("\n是否保存此配置供下次使用？[Y/n]: ").strip().lower()
@@ -3131,52 +3301,68 @@ def upload_to_cloudflare_api(result_file="result.csv"):
             print("   请检查 URL 格式是否正确")
             return None
     
-    # 构建 API URL
-    api_url = f"https://{worker_domain}/{uuid}/api/preferred-ips"
+    # 解析多端点配置
+    domains = worker_domain.split(',') if worker_domain else []
+    uuids = uuid.split(',') if uuid else []
     
-    # 检查是否已有数据
-    print("\n🔍 正在检查现有优选IP...")
-    try:
-        try:
-            response = requests.get(api_url, timeout=10)
-        except ImportError as e:
-            # SSL模块不可用，静默切换到curl
-            if "SSL module is not available" in str(e):
-                response = curl_request(api_url, method='GET', timeout=10)
-            else:
-                raise
-        
-        if response.status_code == 200:
-            result = response.json()
-            existing_count = result.get('count', 0)
-            if existing_count > 0:
-                print(f"⚠️  发现已存在 {existing_count} 个优选IP")
-                print("\n是否要清空现有数据后再添加新的？")
-                print("  1. 是 - 清空后添加（推荐，避免重复）")
-                print("  2. 否 - 直接添加（可能有重复提示）")
-                
-                while True:
-                    clear_choice = input("\n请选择 [1/2]: ").strip()
-                    if clear_choice == "1":
-                        print("准备清空现有数据...")
-                        should_clear = True
-                        break
-                    elif clear_choice == "2":
-                        print("将直接添加，跳过清空")
-                        should_clear = False
-                        break
-                    else:
-                        print("✗ 请输入 1 或 2")
-            else:
-                should_clear = False
-                print("✅ 当前无数据，将直接添加")
+    if len(domains) != len(uuids):
+        # 尝试修复：如果只有一个UUID但有多个域名
+        if len(uuids) == 1 and len(domains) > 1:
+            uuids = uuids * len(domains)
         else:
-            should_clear = False
-            print("⚠️  无法获取现有数据状态，将直接尝试添加")
-    except Exception as e:
-        should_clear = False
-        print(f"⚠️  检查现有数据失败: {e}")
-        print("将继续尝试添加...")
+            print(f"❌ 域名数量 ({len(domains)}) 与 UUID 数量 ({len(uuids)}) 不匹配")
+            return None
+
+    # 检查现有数据 (检查所有端点)
+    print("\n🔍 正在检查现有优选IP...")
+    total_existing_count = 0
+    endpoints_with_data = []
+    
+    for i, (d, u) in enumerate(zip(domains, uuids)):
+        curr_api_url = f"https://{d}/{u}/api/preferred-ips"
+        try:
+            try:
+                response = requests.get(curr_api_url, timeout=10)
+            except ImportError as e:
+                if "SSL module is not available" in str(e):
+                    response = curl_request(curr_api_url, method='GET', timeout=10)
+                else:
+                    raise
+            
+            if response.status_code == 200:
+                result = response.json()
+                count = result.get('count', 0)
+                if count > 0:
+                    total_existing_count += count
+                    endpoints_with_data.append(f"{d} ({count}个)")
+        except Exception:
+            pass # 忽略检查错误，后续上传时会再次处理
+
+    should_clear = False
+    if total_existing_count > 0:
+        print(f"⚠️  在以下节点发现已存在数据:")
+        for info in endpoints_with_data:
+            print(f"   - {info}")
+        print(f"   总计: {total_existing_count} 个优选IP")
+        
+        print("\n是否要清空现有数据后再添加新的？")
+        print("  1. 是 - 清空所有节点数据后添加（推荐）")
+        print("  2. 否 - 直接添加（可能有重复提示）")
+        
+        while True:
+            clear_choice = input("\n请选择 [1/2]: ").strip()
+            if clear_choice == "1":
+                print("准备清空现有数据...")
+                should_clear = True
+                break
+            elif clear_choice == "2":
+                print("将直接添加，跳过清空")
+                should_clear = False
+                break
+            else:
+                print("✗ 请输入 1 或 2")
+    else:
+        print("✅ 当前无数据，将直接添加")
     
     # 读取测速结果
     print("\n📊 正在读取测速结果...")
@@ -3279,142 +3465,114 @@ def upload_to_cloudflare_api(result_file="result.csv"):
             print("取消上报")
             return None
         
-        # 如果需要清空，先执行清空操作
-        if should_clear:
-            print("\n🗑️  正在清空现有数据...")
-            try:
+        # 循环处理每个 API
+        for i, (domain, current_uuid) in enumerate(zip(domains, uuids), 1):
+            domain = domain.strip()
+            current_uuid = current_uuid.strip()
+            
+            print(f"\n[{i}/{len(domains)}] 正在上报到: {domain}")
+            api_url = f"https://{domain}/{current_uuid}/api/preferred-ips"
+            
+            # 如果需要清空，先执行清空操作
+            if should_clear:
+                print("  🗑️  正在清空现有数据...")
                 try:
-                    delete_response = requests.delete(
-                        api_url,
-                        json={"all": True},
-                        headers={"Content-Type": "application/json"},
-                        timeout=10
-                    )
-                except ImportError as e:
-                    # SSL模块不可用，静默切换到curl
-                    if "SSL module is not available" in str(e):
-                        delete_response = curl_request(
+                    try:
+                        delete_response = requests.delete(
                             api_url,
-                            method='DELETE',
-                            data={"all": True},
+                            json={"all": True},
                             headers={"Content-Type": "application/json"},
                             timeout=10
+                        )
+                    except ImportError as e:
+                        # SSL模块不可用，静默切换到curl
+                        if "SSL module is not available" in str(e):
+                            delete_response = curl_request(
+                                api_url,
+                                method='DELETE',
+                                data={"all": True},
+                                headers={"Content-Type": "application/json"},
+                                timeout=10
+                            )
+                        else:
+                            raise
+                    
+                    if delete_response.status_code == 200:
+                        print("  ✅ 现有数据已清空")
+                    else:
+                        print(f"  ⚠️  清空失败 (HTTP {delete_response.status_code})，继续尝试添加...")
+                except Exception as e:
+                    print(f"  ⚠️  清空操作失败: {e}，继续尝试添加...")
+            
+            # 构建批量上报数据
+            batch_data = []
+            for ip_info in best_ips[:upload_count]:
+                # 构建节点名称：地区名-速度MB/s
+                region_name = ip_info.get('region_name', '未知地区')
+                speed = ip_info['speed']
+                name = f"{region_name}-{speed:.2f}MB/s"
+                
+                batch_data.append({
+                    "ip": ip_info['ip'],
+                    "port": ip_info['port'],
+                    "name": name
+                })
+            
+            # 发送批量POST请求
+            print("  🚀 正在上报优选IP...")
+            try:
+                try:
+                    response = requests.post(
+                        api_url,
+                        json=batch_data,
+                        headers={"Content-Type": "application/json"},
+                        timeout=30
+                    )
+                except ImportError as e:
+                    # SSL模块不可用，静默切换到curl备用方案
+                    if "SSL module is not available" in str(e):
+                        response = curl_request(
+                            api_url,
+                            method='POST',
+                            data=batch_data,
+                            headers={"Content-Type": "application/json"},
+                            timeout=30
                         )
                     else:
                         raise
                 
-                if delete_response.status_code == 200:
-                    print("✅ 现有数据已清空")
+                # 处理响应
+                if response and response.status_code == 200:
+                    result = response.json()
+                    if result.get('success'):
+                        success_count = result.get('added', 0)
+                        fail_count = result.get('failed', 0)
+                        skipped_count = result.get('skipped', 0)
+                        
+                        print(f"  ✅ 成功添加: {success_count} 个")
+                        if skipped_count > 0:
+                            print(f"  ⚠️  跳过重复: {skipped_count} 个")
+                        if fail_count > 0:
+                            print(f"  ❌ 失败: {fail_count} 个")
+                    else:
+                        print(f"  ❌ 批量上报失败: {result.get('error', '未知错误')}")
+                elif response and response.status_code == 403:
+                    print(f"  ❌ 认证失败！请检查 UUID 是否正确")
+                elif response:
+                    print(f"  ❌ 批量上报失败 (HTTP {response.status_code})")
                 else:
-                    print(f"⚠️  清空失败 (HTTP {delete_response.status_code})，继续尝试添加...")
-            except Exception as e:
-                print(f"⚠️  清空操作失败: {e}，继续尝试添加...")
-        
-        # 构建批量上报数据
-        print("\n🚀 开始批量上报优选IP...")
-        batch_data = []
-        for ip_info in best_ips[:upload_count]:
-            # 构建节点名称：地区名-速度MB/s
-            region_name = ip_info.get('region_name', '未知地区')
-            speed = ip_info['speed']
-            name = f"{region_name}-{speed:.2f}MB/s"
-            
-            batch_data.append({
-                "ip": ip_info['ip'],
-                "port": ip_info['port'],
-                "name": name
-            })
-        
-        # 发送批量POST请求
-        use_curl_fallback = False
-        response = None
-        success_count = 0
-        fail_count = 0
-        skipped_count = 0
-        
-        try:
-            try:
-                response = requests.post(
-                    api_url,
-                    json=batch_data,
-                    headers={"Content-Type": "application/json"},
-                    timeout=30
-                )
-            except ImportError as e:
-                # SSL模块不可用，静默切换到curl备用方案
-                if "SSL module is not available" in str(e):
-                    use_curl_fallback = True
-                    response = curl_request(
-                        api_url,
-                        method='POST',
-                        data=batch_data,
-                        headers={"Content-Type": "application/json"},
-                        timeout=30
-                    )
-                else:
-                    raise
-            
-            # 处理响应
-            if response and response.status_code == 200:
-                result = response.json()
-                if result.get('success'):
-                    success_count = result.get('added', 0)
-                    fail_count = result.get('failed', 0)
-                    skipped_count = result.get('skipped', 0)
+                    print(f"  ❌ 批量上报失败 (无响应)")
                     
-                    print("✅ 批量上报完成！")
-                    print(f"   成功添加: {success_count} 个")
-                    if skipped_count > 0:
-                        print(f"   跳过重复: {skipped_count} 个")
-                    if fail_count > 0:
-                        print(f"   失败: {fail_count} 个")
-                else:
-                    print(f"❌ 批量上报失败: {result.get('error', '未知错误')}")
-                    fail_count = upload_count
-            elif response and response.status_code == 403:
-                print(f"❌ 认证失败！请检查：")
-                print(f"   1. UUID或者路径是否正确")
-                print(f"   2. 是否在配置页面开启了 'API管理' 功能")
-                fail_count = upload_count
-            elif response:
-                print(f"❌ 批量上报失败 (HTTP {response.status_code})")
-                try:
-                    error_detail = response.json()
-                    print(f"   错误详情: {error_detail.get('error', '无详情')}")
-                except:
-                    pass
-                fail_count = upload_count
-                
-        except requests.exceptions.Timeout:
-            print(f"❌ 请求超时，请检查网络连接")
-            print(f"   建议：检查网络连接或稍后重试")
-            fail_count = upload_count
-        except requests.exceptions.RequestException as e:
-            print(f"❌ 网络错误: {e}")
-            print(f"   建议：检查网络连接或API地址是否正确")
-            fail_count = upload_count
-        except Exception as e:
-            print(f"❌ 请求失败: {e}")
-            print(f"   建议：检查配置是否正确，或联系技术支持")
-            fail_count = upload_count
+            except requests.exceptions.Timeout:
+                print(f"  ❌ 请求超时，请检查网络连接")
+            except requests.exceptions.RequestException as e:
+                print(f"  ❌ 网络错误: {e}")
+            except Exception as e:
+                print(f"  ❌ 请求失败: {e}")
         
-        # 显示统计信息
         print("\n" + "=" * 70)
-        print(" 批量上报完成！")
+        print(" 所有任务已完成！")
         print("=" * 70)
-        print(f"  ✅ 成功添加: {success_count} 个")
-        if 'skipped_count' in locals() and skipped_count > 0:
-            print(f"  ⚠️  跳过重复: {skipped_count} 个")
-        if fail_count > 0:
-            print(f"  ❌ 失败: {fail_count} 个")
-        print(f"  📊 总计: {upload_count} 个")
-        print("=" * 70)
-        
-        if success_count > 0:
-            print(f"\n💡 提示:")
-            print(f"   - 您可以访问 https://{worker_domain}/{uuid} 查看管理页面")
-            print(f"   - 优选IP已添加，订阅生成时会自动使用")
-            print(f"   - 批量上报速度更快，避免了逐个请求的超时问题")
         
         # 返回上传配置信息
         return {
@@ -3422,7 +3580,7 @@ def upload_to_cloudflare_api(result_file="result.csv"):
             "worker_domain": worker_domain,
             "uuid": uuid,
             "upload_count": upload_count,
-            "clear_existing": should_clear  # 保存清空选项
+            "clear_existing": should_clear
         }
         
     except Exception as e:
