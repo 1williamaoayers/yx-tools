@@ -15,7 +15,7 @@
 *   **⚡ 智能优选**：自动下载最新 IP 库，一键找出当下最快的 IP。
 *   **🤖 自动化**：支持定时任务，每天自动测速并更新配置，彻底解放双手。
 *   **🐳 Docker 神器**：提供全架构 Docker 镜像，**树莓派/软路由一条命令直接跑**。
-*   **📈 结果上报**：测速结果可自动上传到 GitHub 或 Cloudflare Workers，方便其他设备订阅。
+*   **📈 结果上报**：测速结果可自动上传到 GitHub 或多个 Cloudflare Workers 节点，方便多设备同步订阅。
 
 ## 🖥️ 支持平台
 
@@ -149,7 +149,11 @@ python3 cloudflare_speedtest.py --mode beginner --count 10
 python3 cloudflare_speedtest.py --mode normal --region HKG
 
 # 结果上报：测速完自动上传到 Cloudflare Workers KV
+# 单个上报
 python3 cloudflare_speedtest.py --mode beginner --upload api --worker-domain your.worker.dev --uuid your-uuid
+
+# 多个上报 (支持多节点同步，使用逗号分隔)
+python3 cloudflare_speedtest.py --mode beginner --upload api --worker-domain "worker1.dev,worker2.dev" --uuid "uuid1,uuid2"
 ```
 
 ## 📂 结果说明

@@ -3849,8 +3849,8 @@ def upload_to_cloudflare_api_cli(result_file="result.csv", worker_domain=None, u
     
     Args:
         result_file: 测速结果文件路径
-        worker_domain: Worker域名
-        uuid: UUID或路径
+        worker_domain: Worker域名 (支持多个，用逗号分隔)
+        uuid: UUID或路径 (支持多个，用逗号分隔)
         upload_count: 上传IP数量
         clear_existing: 是否清空现有IP（默认: False）
     """
@@ -3863,67 +3863,26 @@ def upload_to_cloudflare_api_cli(result_file="result.csv", worker_domain=None, u
         print(f"❌ 未找到测速结果文件: {result_file}")
         return
     
-    # 构建 API URL
-    api_url = f"https://{worker_domain}/{uuid}/api/preferred-ips"
+    # 处理多个 API 配置
+    domains = worker_domain.split(',') if worker_domain else []
+    uuids = uuid.split(',') if uuid else []
     
-    # 检查是否已有数据并决定是否清空
-    should_clear = False
-    if clear_existing:
-        # 如果指定了清空选项，先检查现有数据
-        print("\n🔍 正在检查现有优选IP...")
-        try:
-            try:
-                response = requests.get(api_url, timeout=10)
-            except ImportError as e:
-                # SSL模块不可用，静默切换到curl
-                if "SSL module is not available" in str(e):
-                    response = curl_request(api_url, method='GET', timeout=10)
-                else:
-                    raise
-            
-            if response.status_code == 200:
-                result = response.json()
-                existing_count = result.get('count', 0)
-                if existing_count > 0:
-                    print(f"⚠️  发现已存在 {existing_count} 个优选IP")
-                    should_clear = True
-                else:
-                    print("✅ 当前无数据，将直接添加")
-            else:
-                print("⚠️  无法获取现有数据状态，将尝试清空后添加")
-                should_clear = True
-        except Exception as e:
-            print(f"⚠️  检查现有数据失败: {e}")
-            print("将继续尝试清空后添加...")
-            should_clear = True
-    else:
-        # 如果没有指定清空选项，检查现有数据但不清空
-        print("\n🔍 正在检查现有优选IP...")
-        try:
-            try:
-                response = requests.get(api_url, timeout=10)
-            except ImportError as e:
-                # SSL模块不可用，静默切换到curl
-                if "SSL module is not available" in str(e):
-                    response = curl_request(api_url, method='GET', timeout=10)
-                else:
-                    raise
-            
-            if response.status_code == 200:
-                result = response.json()
-                existing_count = result.get('count', 0)
-                if existing_count > 0:
-                    print(f"⚠️  发现已存在 {existing_count} 个优选IP")
-                    print("💡 提示: 使用 --clear 参数可以在上传前清空现有IP，避免IP累积")
-                else:
-                    print("✅ 当前无数据，将直接添加")
-        except Exception as e:
-            print(f"⚠️  检查现有数据失败: {e}")
+    if not domains or not uuids:
+        print("❌ 缺少 Worker 域名或 UUID")
+        return
+        
+    # 如果只有一个 UUID 但有多个域名，假设所有域名使用同一个 UUID
+    if len(domains) > 1 and len(uuids) == 1:
+        uuids = uuids * len(domains)
     
-    # 读取测速结果（先读取，确认有数据后再清空）
+    if len(domains) != len(uuids):
+        print(f"❌ 域名数量 ({len(domains)}) 与 UUID 数量 ({len(uuids)}) 不匹配")
+        return
+
+    # 读取测速结果（只读取一次）
     print("\n📊 正在读取测速结果...")
+    best_ips = []
     try:
-        best_ips = []
         with open(result_file, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -3982,18 +3941,88 @@ def upload_to_cloudflare_api_cli(result_file="result.csv", worker_domain=None, u
                         })
                     except ValueError:
                         continue
+    except Exception as e:
+        print(f"❌ 读取测速结果失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return
+
+    if not best_ips:
+        print("❌ 未找到有效的测速结果")
+        return
+
+    # 限制上传数量
+    current_upload_count = min(upload_count, len(best_ips))
+    print(f"✅ 找到 {len(best_ips)} 个测速结果，将上传前 {current_upload_count} 个")
+
+    # 循环处理每个 API
+    for i, (domain, current_uuid) in enumerate(zip(domains, uuids), 1):
+        domain = domain.strip()
+        current_uuid = current_uuid.strip()
         
-        if not best_ips:
-            print("❌ 未找到有效的测速结果")
-            return
+        print(f"\n[{i}/{len(domains)}] 正在上报到: {domain}")
+        print("-" * 50)
         
-        # 限制上传数量
-        upload_count = min(upload_count, len(best_ips))
-        print(f"✅ 找到 {len(best_ips)} 个测速结果，将上传前 {upload_count} 个")
+        # 构建 API URL
+        api_url = f"https://{domain}/{current_uuid}/api/preferred-ips"
         
-        # 如果需要清空，先执行清空操作（在确认有数据可以上报之后）
+        # 检查是否已有数据并决定是否清空
+        should_clear = False
+        if clear_existing:
+            # 如果指定了清空选项，先检查现有数据
+            print("🔍 正在检查现有优选IP...")
+            try:
+                try:
+                    response = requests.get(api_url, timeout=10)
+                except ImportError as e:
+                    # SSL模块不可用，静默切换到curl
+                    if "SSL module is not available" in str(e):
+                        response = curl_request(api_url, method='GET', timeout=10)
+                    else:
+                        raise
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    existing_count = result.get('count', 0)
+                    if existing_count > 0:
+                        print(f"⚠️  发现已存在 {existing_count} 个优选IP")
+                        should_clear = True
+                    else:
+                        print("✅ 当前无数据，将直接添加")
+                else:
+                    print("⚠️  无法获取现有数据状态，将尝试清空后添加")
+                    should_clear = True
+            except Exception as e:
+                print(f"⚠️  检查现有数据失败: {e}")
+                print("将继续尝试清空后添加...")
+                should_clear = True
+        else:
+            # 如果没有指定清空选项，检查现有数据但不清空
+            print("🔍 正在检查现有优选IP...")
+            try:
+                try:
+                    response = requests.get(api_url, timeout=10)
+                except ImportError as e:
+                    # SSL模块不可用，静默切换到curl
+                    if "SSL module is not available" in str(e):
+                        response = curl_request(api_url, method='GET', timeout=10)
+                    else:
+                        raise
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    existing_count = result.get('count', 0)
+                    if existing_count > 0:
+                        print(f"⚠️  发现已存在 {existing_count} 个优选IP")
+                        print("💡 提示: 使用 --clear 参数可以在上传前清空现有IP，避免IP累积")
+                    else:
+                        print("✅ 当前无数据，将直接添加")
+            except Exception as e:
+                print(f"⚠️  检查现有数据失败: {e}")
+        
+        # 如果需要清空，先执行清空操作
         if should_clear:
-            print("\n🗑️  正在清空现有数据...")
+            print("🗑️  正在清空现有数据...")
             try:
                 try:
                     delete_response = requests.delete(
@@ -4023,9 +4052,9 @@ def upload_to_cloudflare_api_cli(result_file="result.csv", worker_domain=None, u
                 print(f"⚠️  清空操作失败: {e}，继续尝试添加...")
         
         # 构建批量上报数据
-        print("\n🚀 开始批量上报优选IP...")
+        print("🚀 开始批量上报优选IP...")
         batch_data = []
-        for ip_info in best_ips[:upload_count]:
+        for ip_info in best_ips[:current_upload_count]:
             # 构建节点名称：地区名-速度MB/s
             region_name = ip_info.get('region_name', '未知地区')
             speed = ip_info['speed']
@@ -4067,16 +4096,11 @@ def upload_to_cloudflare_api_cli(result_file="result.csv", worker_domain=None, u
                     fail_count = result.get('failed', 0)
                     skipped_count = result.get('skipped', 0)
                     
-                    print("\n" + "=" * 70)
-                    print(" ✅ 批量上报完成！")
-                    print("=" * 70)
                     print(f"  ✅ 成功添加: {success_count} 个")
                     if skipped_count > 0:
                         print(f"  ⚠️  跳过重复: {skipped_count} 个")
                     if fail_count > 0:
                         print(f"  ❌ 失败: {fail_count} 个")
-                    print(f"  📊 总计: {upload_count} 个")
-                    print("=" * 70)
                 else:
                     print(f"❌ 批量上报失败: {result.get('error', '未知错误')}")
             elif response and response.status_code == 403:
@@ -4097,11 +4121,7 @@ def upload_to_cloudflare_api_cli(result_file="result.csv", worker_domain=None, u
             print(f"❌ 网络错误: {e}")
         except Exception as e:
             print(f"❌ 请求失败: {e}")
-        
-    except Exception as e:
-        print(f"❌ 读取测速结果失败: {e}")
-        import traceback
-        traceback.print_exc()
+
 
 
 def upload_to_github_cli(result_file="result.csv", repo_info=None, github_token=None, file_path="cloudflare_ips.txt", upload_count=10):
